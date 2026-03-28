@@ -8,6 +8,9 @@ __pycache__/
 *.pyo
 .venv/
 
+# Data
+data/
+
 # IDE
 .vscode/
 .idea/
