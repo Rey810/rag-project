@@ -10,8 +10,7 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
 
 MODEL="gpt-4o-mini"
-
-PINECONE_INDEX_NAME="allanclear-dense"
+PINECONE_INDEX_NAME= os.getenv("PINECONE_INDEX_NAME")
 
 with open("../../data/chunks.json", "r") as f:
     ALL_CHUNKS = json.load(f)
@@ -62,10 +61,6 @@ def create_and_upsert_embeddings(chunks, batch_size=100):
     except Exception as e:
         print(f"Pipeline failed: {e}")
         raise
-
-def pinecone_test():
-    index = pc.Index("dense-1")
-    print(index.describe_index_stats())
 
 if __name__ == "__main__":
     # pinecone_test()
