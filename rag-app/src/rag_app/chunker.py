@@ -3,6 +3,8 @@ import uuid
 import json
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+ARTICLES_FILE_PATH="../../data/articles/"
+
 
 def chunk_text(text, chunk_size=1000, chunk_overlap=200):
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
@@ -12,11 +14,11 @@ def chunk_text(text, chunk_size=1000, chunk_overlap=200):
 def chunk_articles():
     chunks_with_metadata = []
 
-    for filename in os.listdir("data/articles/"):
+    for filename in os.listdir(ARTICLES_FILE_PATH):
         if not filename.endswith(".json"):
             continue
 
-        filepath = os.path.join("data/articles/", filename)
+        filepath = os.path.join(ARTICLES_FILE_PATH, filename)
 
         with open(filepath, "r") as f:
             data = json.load(f)
@@ -32,18 +34,25 @@ def chunk_articles():
                 "date": data["date"],
                 "category": data["category"],
                 "url": data["url"],
-                "chunk": article_chunk[1],
+                "chunk": article_chunk,
                 "chunk_id": chunk_id,
                 "chunk_count": chunk_count,
                 "source_type": "article"
             })
 
-    print(f"\nDone. {len(chunks_with_metadata)} total chunks from {len(os.listdir('data/articles/'))} files.")
+    print(f"\nDone. {len(chunks_with_metadata)} total chunks from {len(os.listdir(ARTICLES_FILE_PATH))} files.")
+    return chunks_with_metadata
+
+def create_and_save_chunks():
+    with open("../../data/chunks.json", "w") as f:
+        chunks_with_metadata = chunk_articles()
+        json.dump(chunks_with_metadata, f, indent=2)
+
     return chunks_with_metadata
 
 
 if __name__ == "__main__":
-    chunks = chunk_articles()
+    chunks = create_and_save_chunks()
     print(f"\nFirst chunk preview:\n{json.dumps(chunks[0], indent=2)}")
     print(f"\nSecond chunk preview:\n{json.dumps(chunks[1], indent=2)}")
 
