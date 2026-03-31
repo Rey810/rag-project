@@ -11,6 +11,8 @@ pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
 
 MODEL="gpt-4o-mini"
 PINECONE_INDEX_NAME= os.getenv("PINECONE_INDEX_NAME")
+INDEX = pc.Index(PINECONE_INDEX_NAME)
+
 
 def get_embeddings(list_of_chunks):
     embeddings = client.embeddings.create(input=list_of_chunks, model="text-embedding-3-small").data
@@ -21,8 +23,7 @@ def get_embeddings(list_of_chunks):
 
 
 def upsert_to_pinecone(list_of_chunks):
-# try to add the embedding to Pinecone
-    index = pc.Index(PINECONE_INDEX_NAME)
+    # try to add the embedding to Pinecone
     vectors = [ 
         {
             "id": chunk["chunk_id"],
@@ -34,10 +35,19 @@ def upsert_to_pinecone(list_of_chunks):
         } for chunk in list_of_chunks
     ] 
 
-    index.upsert(vectors=vectors)
+    INDEX.upsert(vectors=vectors)
 
 
 def create_and_upsert_embeddings(chunks, batch_size=100):
+    try:
+        print(f"Attempting to delete index {PINECONE_INDEX_NAME}")
+        INDEX.delete(delete_all=True)
+        print(f"Index {PINECONE_INDEX_NAME} successfully deleted")
+    
+    except Exception as e:
+        print(f"Deleting index failed: {e}")
+        raise
+
     try:
         # iterate over the chunks and process in batches
         for i in range(0, len(chunks), batch_size):
@@ -60,7 +70,7 @@ def create_and_upsert_embeddings(chunks, batch_size=100):
         raise
 
 if __name__ == "__main__":
-    with open("../../data/chunks.json", "r") as f:
+    with open(os.path.join(os.path.dirname(__file__), "data", "chunks.json"), "r") as f:
         ALL_CHUNKS = json.load(f)
 
     create_and_upsert_embeddings(ALL_CHUNKS)
