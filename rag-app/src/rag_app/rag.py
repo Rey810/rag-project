@@ -12,21 +12,34 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 MODEL="gpt-4o-mini"
 
 
-# add those chunks to the rest of the user prompt
-# generate a response
-    # prompt schema: system prompt, user prompt, chunks (later: history)
-
 # TODO: add metadata to chunk in a format that makes sense so that the LLM can reference author, date etc...
 
 
-def user_llm_response():
-    user_query = input("Enter a question: ")
-    similar_chunks = get_similar_chunks(user_query, 10)
+def single_conversation():
+    WELCOME_MESSAGE = "Hi! I'm AllanClear, how can I help you?"
+    print(f"{WELCOME_MESSAGE}")
 
-    query_llm(user_query, similar_chunks, SYSTEM_PROMPT)
+    chat_history = []
+    chat_history += [{"role": "assistant", "content": WELCOME_MESSAGE }]
 
-def query_llm(user_query, similar_chunks, system_prompt):
+    
+    while True:
+        user_input = input("User: ")
 
+        if user_input.lower() in ["exit", "quit"]:
+            break
+        
+        chat_history += [{"role": "user", "content": user_input}]
+
+        similar_chunks = get_similar_chunks(user_input, 10)
+
+        llm_response = query_llm(chat_history, similar_chunks)
+        chat_history.append({"role": "assistant", "content": llm_response})
+
+        print(f"Assistant: {llm_response}\n")
+
+
+def query_llm(user_query, similar_chunks, system_prompt=SYSTEM_PROMPT):
     formatted_chunks_context = "\n\n".join(
         f"Source {i+1}:\n{chunk}" for i, chunk in enumerate(similar_chunks)
     )
@@ -37,9 +50,8 @@ def query_llm(user_query, similar_chunks, system_prompt):
         input=user_query
     )
 
-    print(response.output_text)
     return response.output_text
 
 if __name__ == "__main__":
     # test 
-    user_llm_response()
+    single_conversation()

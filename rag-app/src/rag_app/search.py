@@ -18,7 +18,7 @@ def get_similar_chunks(query, top_k=3):
     try: 
         query_embedding = get_query_embedding(query)
         vectordb_response = search_vectordb(query_embedding, top_k)
-        return [chunk["metadata"]["chunk"] for chunk in vectordb_response.matches]
+        return vectordb_response.matches
     
     except Exception as e:
         print(f"Query embedding and chunking retrieval pipeline failed: {e}")
