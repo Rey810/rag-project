@@ -12,14 +12,11 @@ pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
 MODEL="gpt-4o-mini"
 PINECONE_INDEX_NAME= os.getenv("PINECONE_INDEX_NAME")
 
-with open("../../data/chunks.json", "r") as f:
-    ALL_CHUNKS = json.load(f)
-
-
 def get_embeddings(list_of_chunks):
     embeddings = client.embeddings.create(input=list_of_chunks, model="text-embedding-3-small").data
 
-    print(f"{len(embeddings)} embeddings created for {len(list_of_chunks)} chunks")
+    if len(list_of_chunks) > 1:
+        print(f"{len(embeddings)} embeddings created for {len(list_of_chunks)} chunks")
     return embeddings
 
 
@@ -63,5 +60,7 @@ def create_and_upsert_embeddings(chunks, batch_size=100):
         raise
 
 if __name__ == "__main__":
-    # pinecone_test()
+    with open("../../data/chunks.json", "r") as f:
+        ALL_CHUNKS = json.load(f)
+
     create_and_upsert_embeddings(ALL_CHUNKS)
