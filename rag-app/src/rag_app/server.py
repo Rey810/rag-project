@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from search import get_similar_chunks
 from prompts import SYSTEM_PROMPT, REWRITE_PROMPT
@@ -54,13 +55,16 @@ def rag_enhanced_llm_call(chat_history, similar_chunks, system_prompt=SYSTEM_PRO
         f"Source {i+1}:\n{chunk}" for i, chunk in enumerate(similar_chunks)
     )
 
-    response = client.responses.create(
+    stream = client.responses.create(
         model=MODEL,
         instructions=system_prompt.format(context=formatted_chunks_context),
-        input=chat_history
+        input=chat_history,
+        stream=True
     )
 
-    return response.output_text
+    for event in stream:
+        if event.type == "response.output_text.delta":
+            yield event.delta
 
 
 @app.post("/chat")
@@ -80,15 +84,14 @@ def chat(request: ChatRequest):
     # Rewrites the user query if there is more than one user message
     if user_messages_count > 1:
         rewritten_user_query = query_rewrite_llm_call(latest_user_message, chat_history, REWRITE_PROMPT)
-
         similar_chunks = get_similar_chunks(rewritten_user_query, TOP_CHUNK_COUNT)
-        response = rag_enhanced_llm_call(chat_history, similar_chunks)
-
-        return {"response": response}
 
     # Default route
     else:
         similar_chunks = get_similar_chunks(latest_user_message, TOP_CHUNK_COUNT)
-        response = rag_enhanced_llm_call(chat_history, similar_chunks)
 
-        return {"response": response}
+    return StreamingResponse(
+        rag_enhanced_llm_call(chat_history, similar_chunks),
+        media_type="text/event-stream"
+    )
+
