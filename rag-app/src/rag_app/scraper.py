@@ -152,7 +152,7 @@ def save_article(article, index):
 def main():
     urls = fetch_article_urls_from_sitemap()
 
-    MAX_ARTICLES = 100  # Stop after scraping this many articles, None for all
+    MAX_ARTICLES = None  # Stop after scraping this many articles, None for all
 
     print(f"\nScraping articles (target: {MAX_ARTICLES or 'all'})...\n")
 
@@ -196,6 +196,5 @@ def main():
     print(f"Output:  {os.path.abspath(OUTPUT_DIR)}")
 
 
-# todo: why is this here?
-# if __name__ == "__main__":
-#     main()
+if __name__ == "__main__":
+    main()
