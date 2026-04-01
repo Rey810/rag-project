@@ -81,3 +81,27 @@ Assistant: That's a wise choice! Can you give me a bit more context about you so
 Remember: Only use information from the <context> above. If the context does not contain the answer, say so. Always cite your sources. Keep it clear and jargon-free.
 </final_reminder>
 """
+
+
+REWRITE_PROMPT="""
+    Your task is to rewrite the user query ({user_query}) in a chat history ({chat_history}). 
+
+Main Goal    
+The purpose of this is to use the rewritten prompt to find relevant chunks in a vector database without needing to embed the entire chat history. Therefore, the rewritten query needs to capture the contextual meaning of the chat history.
+
+Rewrite Rules
+- Capture the contextual meaning of the query
+- Include specific details so that one can understand the query in it's entirety if one was given only the user query.
+- Do not simply summarize the chat history, the intent of the user query must be preserved.
+
+<example>
+Assistant: Hi! I'm AllanClear, how can I help you?
+User: I'm 35 years old and want to start investing for retirement
+Assistant: That's a great time to start! Allan Gray offers several retirement-focused products. Are you looking at a retirement annuity, or more of a general long-term investment?
+User: Probably a retirement annuity. What are the tax benefits?
+Assistant: Contributions to a retirement annuity are tax-deductible up to 27.5% of your taxable income, capped at R350,000 per year. Your investment also grows tax-free inside the fund.
+User: And what about when I retire, how is it taxed then?
+
+Here, the last user message "And what about when I retire, how is it taxed then?" should be rewritten to be "When I eventually withdraw from my retirement annuity at retirement age, how will the retirement annuity withdrawals be taxed — including any lump sum and any ongoing annuity income?"
+</example>
+"""

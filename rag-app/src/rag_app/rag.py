@@ -12,7 +12,6 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 MODEL="gpt-4o-mini"
 
 
-# TODO: add metadata to chunk in a format that makes sense so that the LLM can reference author, date etc...
 
 
 def single_conversation():
@@ -28,18 +27,18 @@ def single_conversation():
 
         if user_input.lower() in ["exit", "quit"]:
             break
-        
+
         chat_history += [{"role": "user", "content": user_input}]
 
         similar_chunks = get_similar_chunks(user_input, 10)
 
-        llm_response = query_llm(chat_history, similar_chunks)
+        llm_response = rag_enhanced_query(chat_history, similar_chunks)
         chat_history.append({"role": "assistant", "content": llm_response})
 
         print(f"Assistant: {llm_response}\n")
 
 
-def query_llm(user_query, similar_chunks, system_prompt=SYSTEM_PROMPT):
+def rag_enhanced_query(user_query, similar_chunks, system_prompt=SYSTEM_PROMPT):
     formatted_chunks_context = "\n\n".join(
         f"Source {i+1}:\n{chunk}" for i, chunk in enumerate(similar_chunks)
     )
