@@ -8,8 +8,17 @@ from prompts import SYSTEM_PROMPT, REWRITE_PROMPT, PERSONA_JUST_THE_ANSWER, PERS
 import os
 from dotenv import load_dotenv
 from openai import OpenAI
+from arize.otel import register
+from openinference.instrumentation.openai import OpenAIInstrumentor
 
 load_dotenv()
+
+tracer_provider = register(
+    space_id=os.getenv("ARIZE_SPACE_ID"),
+    api_key=os.getenv("ARIZE_API_KEY"),
+    project_name="allanclear",
+)
+OpenAIInstrumentor().instrument(tracer_provider=tracer_provider)
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 MODEL = "gpt-4o-mini"
