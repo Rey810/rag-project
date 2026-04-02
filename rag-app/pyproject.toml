@@ -6,7 +6,7 @@ authors = [
     {name = "reyvdb",email = "reyvdb@gmail.com"}
 ]
 readme = "README.md"
-requires-python = ">=3.14,<4.0"
+requires-python = ">=3.12,<3.14"
 dependencies = [
     "requests (>=2.33.0,<3.0.0)",
     "beautifulsoup4 (>=4.14.3,<5.0.0)",
@@ -16,7 +16,8 @@ dependencies = [
     "openai (>=2.30.0,<3.0.0)",
     "python-dotenv (>=1.2.2,<2.0.0)",
     "fastapi (>=0.135.2,<0.136.0)",
-    "uvicorn (>=0.42.0,<0.43.0)"
+    "uvicorn (>=0.42.0,<0.43.0)",
+    "docling (>=2.84.0,<3.0.0)"
 ]
 
 [tool.poetry]
