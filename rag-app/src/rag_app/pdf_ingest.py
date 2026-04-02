@@ -3,16 +3,33 @@ Fund fact sheet ingestion pipeline.
 
 Part A: Batch convert all PDFs in data/fund_fact_sheets/ to Markdown.
 Part B: Split Markdown files into section chunks.
+Part C: Generate contextual descriptions for each chunk using GPT-4o.
 
 Run from rag-app/:
     poetry run python src/rag_app/pdf_ingest.py
 """
 import json
+import os
 import re
+import time
 import uuid
 from pathlib import Path
 
-from docling.document_converter import DocumentConverter
+from dotenv import load_dotenv
+from openai import OpenAI
+
+load_dotenv()
+
+_openai_client: OpenAI | None = None
+
+
+def _get_openai_client() -> OpenAI:
+    global _openai_client
+    if _openai_client is None:
+        _openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    return _openai_client
+
+from src.rag_app.prompts import CONTEXTUAL_ADDITION_PROMPT
 
 PDF_DIR = Path("data/fund_fact_sheets")
 MARKDOWN_DIR = PDF_DIR / "markdown"
@@ -31,6 +48,8 @@ def extract_fund_name(markdown: str) -> str | None:
 
 
 def convert_all_pdfs() -> None:
+    from docling.document_converter import DocumentConverter
+
     MARKDOWN_DIR.mkdir(parents=True, exist_ok=True)
 
     pdf_files = sorted(PDF_DIR.glob("*.pdf"))
@@ -130,6 +149,55 @@ def split_all_markdowns() -> None:
         )
 
 
+def generate_descriptions() -> None:
+    chunks = json.loads(CHUNKS_PATH.read_text(encoding="utf-8"))
+
+    # Skip chunks that already have descriptions (don't start with "## ")
+    remaining = [(i, c) for i, c in enumerate(chunks) if c["chunk"].startswith("## ")]
+    print(f"Generating descriptions for {len(remaining)}/{len(chunks)} chunks...\n")
+
+    # Build fund name -> full markdown lookup
+    md_by_fund: dict[str, str] = {}
+    for md_path in MARKDOWN_DIR.glob("*.md"):
+        markdown = md_path.read_text(encoding="utf-8")
+        fund_name = extract_fund_name(markdown) or md_path.stem.strip()
+        md_by_fund[fund_name] = markdown
+
+    client = _get_openai_client()
+
+    for count, (i, chunk) in enumerate(remaining, start=1):
+        fund_name = chunk["fund"]
+        section_text = chunk["chunk"]
+        full_markdown = md_by_fund.get(fund_name, "")
+
+        prompt = CONTEXTUAL_ADDITION_PROMPT.format(
+            fund_name=fund_name,
+            full_markdown=full_markdown,
+            section_text=section_text,
+        )
+
+        response = client.responses.create(
+            model="gpt-4o",
+            input=prompt,
+            temperature=0,
+        )
+        description = response.output_text.strip()
+        chunk["chunk"] = f"{description}\n\n{section_text}"
+
+        print(f"[{count}/{len(remaining)}] {fund_name} — {chunk['section']}")
+
+        # Save every 50 chunks
+        if count % 50 == 0:
+            CHUNKS_PATH.write_text(json.dumps(chunks, indent=2, ensure_ascii=False), encoding="utf-8")
+            print(f"  (saved progress at {count}/{len(remaining)})")
+
+        time.sleep(0.5)
+
+    CHUNKS_PATH.write_text(json.dumps(chunks, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"\nDone. Updated chunks saved to {CHUNKS_PATH.resolve()}")
+
+
 if __name__ == "__main__":
     convert_all_pdfs()
     split_all_markdowns()
+    generate_descriptions()

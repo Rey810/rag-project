@@ -83,6 +83,26 @@ Remember: Only use information from the <context> above. If the context does not
 """
 
 
+CONTEXTUAL_ADDITION_PROMPT = """You are an expert financial document analyst. You are given a fund fact sheet for {fund_name} and one section from that document.
+
+Your purpose is to add semantic value to the section_text so that it can be found more easily in a vector database.
+
+Write a single, detailed sentence that describes what this section contains. Your description must:
+- Name the fund ("{fund_name}") explicitly
+- Specify the exact type of financial data or information presented (e.g. "annualised returns", "total expense ratio breakdown", "asset allocation by geography", "maximum drawdown statistics")
+- If the section contains a table, describe what the rows and columns represent (e.g. "comparing the fund's performance against its benchmark over 1, 3, 5, and 10-year periods")
+- If the section contains commentary, describe the topic and time period covered
+- Do NOT include any actual numbers, percentages, or data values from the section
+
+Full document for context:
+{full_markdown}
+
+Section to describe:
+{section_text}
+
+Write your one-sentence description:"""
+
+
 REWRITE_PROMPT="""
     Your task is to rewrite the user query ({user_query}) in a chat history ({chat_history}). 
 
