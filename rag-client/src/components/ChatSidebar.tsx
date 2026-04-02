@@ -1,4 +1,5 @@
 import { ChatSidebarItem } from "@/components/ChatSidebarItem";
+import { PersonaSidebarDropdown } from "@/components/PersonaSidebarDropdown";
 import { useChatSessionStore } from "@/stores/chatSessionStore";
 import { PanelLeftCloseIcon, SquarePenIcon } from "lucide-react";
 import type { FC } from "react";
@@ -85,6 +86,11 @@ export const ChatSidebar: FC<ChatSidebarProps> = ({ open, onClose }) => {
             </p>
           )}
         </nav>
+
+        {/* Persona selector */}
+        <div className="shrink-0 border-t border-sidebar-border p-3">
+          <PersonaSidebarDropdown />
+        </div>
       </aside>
     </>
   );
