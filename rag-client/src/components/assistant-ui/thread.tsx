@@ -1,4 +1,5 @@
 import { FinancialLoadingIcon } from "@/components/FinancialLoadingIcon";
+import { PersonaSelector } from "@/components/PersonaSelector";
 import { MarkdownText } from "@/components/assistant-ui/markdown-text";
 import { ToolFallback } from "@/components/assistant-ui/tool-fallback";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
@@ -82,21 +83,23 @@ const ThreadScrollToBottom: FC = () => {
 
 const ThreadWelcome: FC = () => {
   return (
-    <div className="aui-thread-welcome-root mx-auto flex w-full max-w-2xl flex-1 flex-col items-center justify-center px-4">
-      <h1 className="fade-in slide-in-from-bottom-2 animate-in fill-mode-both mb-8 text-center text-3xl font-bold tracking-tight text-foreground duration-300 sm:text-4xl">
-        Hi there, I'm Alan.
-        <br />
-        Let's talk about money.
+    <div className="aui-thread-welcome-root mx-auto flex w-full max-w-[48rem] flex-1 flex-col items-center justify-center px-4">
+      <h1 className="fade-in slide-in-from-bottom-2 animate-in fill-mode-both mb-2 text-center text-3xl font-bold tracking-tight text-foreground duration-300 sm:text-4xl">
+        Hi there, I'm Al.
       </h1>
+      <p className="fade-in slide-in-from-bottom-2 animate-in fill-mode-both mb-8 text-center text-lg text-muted-foreground duration-500 delay-100 sm:text-xl">
+        Helping you go from Allan<span className="font-bold text-foreground">Gray</span>{" "}
+        to Allan<span className="italic text-terracotta">Clear</span>
+      </p>
 
       <ComposerPrimitive.Root className="aui-composer-root relative flex w-full flex-col">
         <div
           data-slot="composer-shell"
-          className="flex w-full flex-col gap-3 rounded-2xl border border-border bg-card p-4 shadow-lg transition-all duration-150 focus-within:border-ring/50 focus-within:shadow-xl focus-within:ring-2 focus-within:ring-ring/15"
+          className="flex w-full flex-col gap-3 rounded-[12px] border border-border bg-white p-4 shadow-sm transition-all duration-150 focus-within:border-ring/50 focus-within:shadow-md focus-within:ring-2 focus-within:ring-ring/15"
         >
           <ComposerPrimitive.Input
             placeholder="Ask about investments, funds, or financial planning..."
-            className="aui-composer-input max-h-32 min-h-12 w-full resize-none bg-transparent px-2 py-1 text-lg font-semibold leading-relaxed outline-none placeholder:text-muted-foreground/60"
+            className="aui-composer-input max-h-32 min-h-[6.375rem] w-full resize-none bg-transparent px-2 py-1 text-base leading-relaxed outline-none placeholder:text-muted-foreground/40 placeholder:font-normal"
             rows={1}
             autoFocus
             aria-label="Message input"
@@ -104,6 +107,10 @@ const ThreadWelcome: FC = () => {
           <ComposerAction />
         </div>
       </ComposerPrimitive.Root>
+
+      <div className="mt-5 w-full">
+        <PersonaSelector />
+      </div>
     </div>
   );
 };
