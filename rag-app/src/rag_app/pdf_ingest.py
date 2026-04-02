@@ -197,7 +197,29 @@ def generate_descriptions() -> None:
     print(f"\nDone. Updated chunks saved to {CHUNKS_PATH.resolve()}")
 
 
+def embed_and_upsert(batch_size: int = 100) -> None:
+    from src.rag_app.ingest import get_embeddings, upsert_to_pinecone
+
+    chunks = json.loads(CHUNKS_PATH.read_text(encoding="utf-8"))
+    print(f"Embedding and upserting {len(chunks)} chunks in batches of {batch_size}...\n")
+
+    for i in range(0, len(chunks), batch_size):
+        batch = chunks[i : i + batch_size]
+        content_to_embed = [chunk["chunk"] for chunk in batch]
+        embeddings = get_embeddings(content_to_embed)
+
+        for embedding, chunk in zip(embeddings, batch):
+            chunk["embedding"] = embedding.embedding
+
+        upsert_to_pinecone(batch)
+        batch_num = i // batch_size + 1
+        print(f"  Batch {batch_num} upserted ({len(batch)} vectors)")
+
+    print(f"\nDone. {len(chunks)} vectors upserted to Pinecone.")
+
+
 if __name__ == "__main__":
     convert_all_pdfs()
     split_all_markdowns()
     generate_descriptions()
+    embed_and_upsert()
