@@ -1,5 +1,6 @@
 import type { ChatModelAdapter } from "@assistant-ui/react";
 import { useChatSessionStore } from "@/stores/chatSessionStore";
+import { usePersonaStore } from "@/stores/personaStore";
 
 const API_URL = "http://localhost:8000/chat";
 
@@ -31,7 +32,10 @@ export const chatModelAdapter: ChatModelAdapter = {
     const response = await fetch(API_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_history: chatHistory }),
+      body: JSON.stringify({
+        chat_history: chatHistory,
+        persona: usePersonaStore.getState().selectedPersona,
+      }),
       signal: abortSignal,
     });
 
