@@ -108,11 +108,12 @@ def build_sources(similar_chunks) -> list[dict]:
             fund = meta.get("fund", "Allan Gray Fund")
             if fund not in seen_funds:
                 seen_funds.add(fund)
+                display_name = fund if "Allan Gray - Orbis" in fund else fund.removeprefix("Allan Gray ").strip()
                 sources.append({
                     "type": "fund_fact_sheet",
                     "title": fund,
                     "url": None,
-                    "label": f"{fund} Fact Sheet",
+                    "label": f"{display_name} Fact Sheet",
                 })
 
     return sources

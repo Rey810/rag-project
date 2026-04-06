@@ -18,18 +18,18 @@ export const SourceLinks: FC<SourceLinksProps> = ({ sources }) => {
             href={source.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="group inline-flex max-w-[220px] items-center gap-1.5 rounded-lg border border-border bg-muted px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground shadow-sm transition-all hover:border-ring/40 hover:bg-muted hover:text-foreground hover:shadow-md"
+            className="group inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground shadow-sm transition-all hover:border-ring/40 hover:bg-muted hover:text-foreground hover:shadow-md"
           >
             <ExternalLinkIcon className="size-3 shrink-0 opacity-60 transition-opacity group-hover:opacity-100" />
-            <span className="truncate">{source.label}</span>
+            <span>{source.label}</span>
           </a>
         ) : (
           <span
             key={i}
-            className="inline-flex max-w-[220px] items-center gap-1.5 rounded-lg border border-border bg-muted/60 px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground/60 shadow-sm"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/60 px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground/60 shadow-sm"
           >
             <FileTextIcon className="size-3 shrink-0 opacity-50" />
-            <span className="truncate">{source.label}</span>
+            <span>{source.label}</span>
           </span>
         )
       )}
