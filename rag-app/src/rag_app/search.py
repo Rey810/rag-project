@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv 
-from ingest import get_embeddings
+from article_ingest import get_embeddings
 from pinecone import Pinecone
 
 load_dotenv()

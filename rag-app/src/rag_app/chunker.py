@@ -6,7 +6,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 ARTICLES_FILE_PATH = os.path.join(os.path.dirname(__file__), "data", "articles")
 
 
-def chunk_text(text, chunk_size=1000, chunk_overlap=200):
+def chunk_text(text, chunk_size=1750, chunk_overlap=250):
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
     chunks = text_splitter.split_text(text)
     return chunks
@@ -44,7 +44,7 @@ def chunk_articles():
     return chunks_with_metadata
 
 def create_and_save_chunks():
-    with open(os.path.join(os.path.dirname(__file__), "data", "chunks.json"), "w") as f:
+    with open(os.path.join(os.path.dirname(__file__), "data", "article_chunks.json"), "w") as f:
         chunks_with_metadata = chunk_articles()
         json.dump(chunks_with_metadata, f, indent=2)
 
