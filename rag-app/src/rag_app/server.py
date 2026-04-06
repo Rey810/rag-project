@@ -8,10 +8,10 @@ from .prompts import SYSTEM_PROMPT, REWRITE_PROMPT, PERSONA_JUST_THE_ANSWER, PER
 import os
 import json
 from dotenv import load_dotenv
-from openai import OpenAI
+import anthropic
 from datetime import date
 from arize.otel import register
-from openinference.instrumentation.openai import OpenAIInstrumentor
+from openinference.instrumentation.anthropic import AnthropicInstrumentor
 
 load_dotenv()
 
@@ -23,12 +23,12 @@ tracer_provider = register(
     api_key=os.getenv("ARIZE_API_KEY"),
     project_name="allanclear",
 )
-OpenAIInstrumentor().instrument(tracer_provider=tracer_provider)
+AnthropicInstrumentor().instrument(tracer_provider=tracer_provider)
 # ---------------------------------
 # --------------------------------- 
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-MODEL = "gpt-4.1-mini"
+client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+MODEL = "claude-sonnet-4-6"
 TOP_CHUNK_COUNT = 5
 
 PERSONA_MAP = {
@@ -53,18 +53,19 @@ class ChatRequest(BaseModel):
 def query_rewrite_llm_call(user_query, chat_history, system_prompt=SYSTEM_PROMPT):
     try:
         print(f"Attempting to rewrite query: {user_query}")
-        response = client.responses.create(
+        response = client.messages.create(
             model=MODEL,
-            instructions=system_prompt.format(
-                user_query=user_query,  
+            max_tokens=512,
+            system=system_prompt.format(
+                user_query=user_query,
                 chat_history=json.dumps(chat_history),
                 todays_date=date.today().strftime("%B %d, %Y")
             ),
-            input=user_query
+            messages=[{"role": "user", "content": user_query}]
         )
-
-        print(f"Successfully rewritten query: {response.output_text}")
-        return response.output_text
+        rewritten = response.content[0].text
+        print(f"Successfully rewritten query: {rewritten}")
+        return rewritten
     except Exception as e:
         print(f"Query rewrite pipeline failed: {e}")
         raise
@@ -123,23 +124,21 @@ def rag_enhanced_llm_call(chat_history, similar_chunks, persona_prompt, system_p
     sources = build_sources(similar_chunks)
 
     formatted_chunks_context = {
-        "Relevant context": [ format_chunk(chunk) for chunk in similar_chunks ]
+        "Relevant context": [format_chunk(chunk) for chunk in similar_chunks]
     }
 
-    stream = client.responses.create(
+    with client.messages.stream(
         model=MODEL,
-        instructions=system_prompt.format(
+        max_tokens=2048,
+        system=system_prompt.format(
             persona=persona_prompt,
             context=json.dumps(formatted_chunks_context),
             todays_date=date.today().strftime("%B %d, %Y")
         ),
-        input=chat_history,
-        stream=True
-    )
-
-    for event in stream:
-        if event.type == "response.output_text.delta":
-            yield event.delta
+        messages=chat_history,
+    ) as stream:
+        for text in stream.text_stream:
+            yield text
 
     yield f"[SOURCES]{json.dumps(sources)}"
 

@@ -20,7 +20,9 @@ dependencies = [
     "docling (>=2.84.0,<3.0.0)",
     "arize-otel (>=0.2.0)",
     "openinference-instrumentation-openai (>=0.1.0)",
-    "datetime (>=6.0,<7.0)"
+    "datetime (>=6.0,<7.0)",
+    "anthropic (>=0.89.0,<0.90.0)",
+    "openinference-instrumentation-anthropic (>=1.0.0,<2.0.0)"
 ]
 
 [tool.poetry]
