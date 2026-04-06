@@ -1,9 +1,11 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import type { Source } from "@/types/sources";
 
 export interface BackendMessage {
   role: string;
   content: string;
+  sources?: Source[];
 }
 
 export interface ChatSession {

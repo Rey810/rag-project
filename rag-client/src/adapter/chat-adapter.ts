@@ -1,8 +1,10 @@
 import type { ChatModelAdapter } from "@assistant-ui/react";
 import { useChatSessionStore } from "@/stores/chatSessionStore";
 import { usePersonaStore } from "@/stores/personaStore";
+import type { Source } from "@/types/sources";
 
 const API_URL = "http://localhost:8000/chat";
+const SOURCES_SENTINEL = "[SOURCES]";
 
 interface BackendMessage {
   role: string;
@@ -46,19 +48,43 @@ export const chatModelAdapter: ChatModelAdapter = {
     const reader = response.body!.getReader();
     const decoder = new TextDecoder();
     let text = "";
+    let sources: Source[] = [];
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      text += decoder.decode(value, { stream: true });
+
+      const chunk = decoder.decode(value, { stream: true });
+      const sentinelIdx = chunk.indexOf(SOURCES_SENTINEL);
+
+      if (sentinelIdx !== -1) {
+        text += chunk.slice(0, sentinelIdx);
+        try {
+          sources = JSON.parse(chunk.slice(sentinelIdx + SOURCES_SENTINEL.length));
+        } catch {
+          sources = [];
+        }
+      } else {
+        text += chunk;
+      }
+
       yield { content: [{ type: "text" as const, text }] };
     }
+
+    yield {
+      content: [
+        { type: "text" as const, text },
+        ...(sources.length > 0
+          ? [{ type: "data" as const, name: "sources", data: sources }]
+          : []),
+      ],
+    };
 
     useChatSessionStore
       .getState()
       .updateSessionMessages(sessionId, [
         ...chatHistory,
-        { role: "assistant", content: text },
+        { role: "assistant", content: text, sources },
       ]);
   },
 };

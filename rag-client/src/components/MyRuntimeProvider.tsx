@@ -11,10 +11,17 @@ export function MyRuntimeProvider({ children }: { children: ReactNode }) {
     const session = sessions.find((s) => s.id === activeSessionId);
     if (!session || session.messages.length === 0) return [];
 
-    return session.messages.map((m) => ({
-      role: m.role as "user" | "assistant",
-      content: [{ type: "text" as const, text: m.content }],
-    }));
+    return session.messages.map((m) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const content: any[] = [{ type: "text" as const, text: m.content }];
+      if (m.sources && m.sources.length > 0) {
+        content.push({ type: "data" as const, name: "sources", data: m.sources });
+      }
+      return {
+        role: m.role as "user" | "assistant",
+        content,
+      };
+    });
     // Only compute on mount (key-based remounting handles session switches)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
