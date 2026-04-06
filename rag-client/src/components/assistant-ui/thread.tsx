@@ -2,6 +2,8 @@ import { FinancialLoadingIcon } from "@/components/FinancialLoadingIcon";
 import { PersonaSelector } from "@/components/PersonaSelector";
 import { MarkdownText } from "@/components/assistant-ui/markdown-text";
 import { ToolFallback } from "@/components/assistant-ui/tool-fallback";
+import { SourceLinks } from "@/components/SourceLinks";
+import type { Source } from "@/types/sources";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -177,6 +179,8 @@ const AssistantMessageContent: FC = () => {
         if (part.type === "text") return <MarkdownText />;
         if (part.type === "tool-call")
           return part.toolUI ?? <ToolFallback {...part} />;
+        if (part.type === "data" && part.name === "sources")
+          return <SourceLinks sources={part.data as Source[]} />;
         return null;
       }}
     </MessagePrimitive.Parts>
