@@ -77,7 +77,6 @@ def format_chunk(chunk):
             "Article Author": chunk["metadata"]["author"],
             "Article Category": chunk["metadata"]["category"],
             "Text Relevant to User Question": chunk["metadata"]["chunk"],
-            "URL Link to Article": chunk["metadata"]["url"],
             "Article Publication Date": chunk["metadata"]["date"]
         }
     else:
@@ -88,7 +87,39 @@ def format_chunk(chunk):
             "Description and Details of Section": chunk["metadata"]["chunk"]
         }
 
+def build_sources(similar_chunks) -> list[dict]:
+    seen_articles: set[str] = set()
+    seen_funds: set[str] = set()
+    sources = []
+
+    for chunk in similar_chunks:
+        meta = chunk["metadata"]
+        if meta.get("title"):  # article
+            url = meta.get("url", "")
+            if url and url not in seen_articles:
+                seen_articles.add(url)
+                sources.append({
+                    "type": "article",
+                    "title": meta["title"],
+                    "url": url,
+                    "label": meta["title"],
+                })
+        else:  # fund fact sheet
+            fund = meta.get("fund", "Allan Gray Fund")
+            if fund not in seen_funds:
+                seen_funds.add(fund)
+                sources.append({
+                    "type": "fund_fact_sheet",
+                    "title": fund,
+                    "url": None,
+                    "label": f"{fund} Fact Sheet",
+                })
+
+    return sources
+
 def rag_enhanced_llm_call(chat_history, similar_chunks, persona_prompt, system_prompt=SYSTEM_PROMPT):
+
+    sources = build_sources(similar_chunks)
 
     formatted_chunks_context = {
         "Relevant context": [ format_chunk(chunk) for chunk in similar_chunks ]
@@ -97,7 +128,7 @@ def rag_enhanced_llm_call(chat_history, similar_chunks, persona_prompt, system_p
     stream = client.responses.create(
         model=MODEL,
         instructions=system_prompt.format(
-            persona=persona_prompt, 
+            persona=persona_prompt,
             context=json.dumps(formatted_chunks_context),
             todays_date=date.today().strftime("%B %d, %Y")
         ),
@@ -108,6 +139,8 @@ def rag_enhanced_llm_call(chat_history, similar_chunks, persona_prompt, system_p
     for event in stream:
         if event.type == "response.output_text.delta":
             yield event.delta
+
+    yield f"[SOURCES]{json.dumps(sources)}"
 
 
 @app.post("/chat")
