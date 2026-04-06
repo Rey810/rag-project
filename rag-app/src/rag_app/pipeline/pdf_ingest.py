@@ -6,7 +6,7 @@ Part B: Split Markdown files into section chunks.
 Part C: Generate contextual descriptions for each chunk using GPT-4o.
 
 Run from rag-app/:
-    poetry run python src/rag_app/pdf_ingest.py
+    poetry run python src/rag_app/pipeline/pdf_ingest.py
 """
 import json
 import os
@@ -29,7 +29,7 @@ def _get_openai_client() -> OpenAI:
         _openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     return _openai_client
 
-from src.rag_app.prompts import CONTEXTUAL_ADDITION_PROMPT
+from ..prompts import CONTEXTUAL_ADDITION_PROMPT
 
 PDF_DIR = Path("data/fund_fact_sheets")
 MARKDOWN_DIR = PDF_DIR / "markdown"
@@ -198,7 +198,7 @@ def generate_descriptions() -> None:
 
 
 def embed_and_upsert(batch_size: int = 100) -> None:
-    from src.rag_app.ingest import get_embeddings, upsert_to_pinecone
+    from article_ingest import get_embeddings, upsert_to_pinecone
 
     chunks = json.loads(CHUNKS_PATH.read_text(encoding="utf-8"))
     print(f"Embedding and upserting {len(chunks)} chunks in batches of {batch_size}...\n")
@@ -219,7 +219,7 @@ def embed_and_upsert(batch_size: int = 100) -> None:
 
 
 if __name__ == "__main__":
-    convert_all_pdfs()
-    split_all_markdowns()
-    generate_descriptions()
+    # convert_all_pdfs()
+    # split_all_markdowns()
+    # generate_descriptions()
     embed_and_upsert()

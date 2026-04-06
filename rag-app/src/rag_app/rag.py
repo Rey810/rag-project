@@ -1,5 +1,5 @@
-from search import get_similar_chunks
-from prompts import SYSTEM_PROMPT
+from .search import get_similar_chunks
+from .prompts import SYSTEM_PROMPT
 
 import os
 from dotenv import load_dotenv 

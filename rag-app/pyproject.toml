@@ -19,7 +19,8 @@ dependencies = [
     "uvicorn (>=0.42.0,<0.43.0)",
     "docling (>=2.84.0,<3.0.0)",
     "arize-otel (>=0.2.0)",
-    "openinference-instrumentation-openai (>=0.1.0)"
+    "openinference-instrumentation-openai (>=0.1.0)",
+    "datetime (>=6.0,<7.0)"
 ]
 
 [tool.poetry]
