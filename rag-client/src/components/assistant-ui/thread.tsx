@@ -84,22 +84,22 @@ const ThreadScrollToBottom: FC = () => {
 const ThreadWelcome: FC = () => {
   return (
     <div className="aui-thread-welcome-root mx-auto flex w-full max-w-[48rem] flex-1 flex-col items-center justify-center px-4">
-      <h1 className="fade-in slide-in-from-bottom-2 animate-in fill-mode-both mb-2 text-center text-3xl font-bold tracking-tight text-foreground duration-300 sm:text-4xl">
-        Hi there, I'm Al.
+      <h1 className="fade-in slide-in-from-bottom-2 animate-in fill-mode-both mb-[0.58rem] text-center text-[2.16rem] font-bold tracking-tight text-foreground duration-300 sm:text-[2.59rem]">
+        Hi there, I'm Ally.
       </h1>
-      <p className="fade-in slide-in-from-bottom-2 animate-in fill-mode-both mb-8 text-center text-lg text-muted-foreground duration-500 delay-100 sm:text-xl">
-        Helping you go from Allan<span className="font-bold text-foreground">Gray</span>{" "}
+      <p className="fade-in slide-in-from-bottom-2 animate-in fill-mode-both mb-[2.3rem] text-center text-[1.29rem] text-muted-foreground duration-500 delay-100 sm:text-[1.44rem]">
+        Helping you get from Allan<span className="italic text-foreground">Gray</span>{" "}
         to Allan<span className="italic text-terracotta">Clear</span>
       </p>
 
       <ComposerPrimitive.Root className="aui-composer-root relative flex w-full flex-col">
         <div
           data-slot="composer-shell"
-          className="flex w-full flex-col gap-3 rounded-[12px] border border-border bg-white p-4 shadow-sm transition-all duration-150 focus-within:border-ring/50 focus-within:shadow-md focus-within:ring-2 focus-within:ring-ring/15"
+          className="flex w-full flex-col gap-3 rounded-[14px] border border-border bg-white p-[1.15rem] shadow-sm transition-all duration-150 focus-within:border-ring/50 focus-within:shadow-md focus-within:ring-2 focus-within:ring-ring/15"
         >
           <ComposerPrimitive.Input
             placeholder="Ask about investments, funds, or financial planning..."
-            className="aui-composer-input max-h-32 min-h-[6.375rem] w-full resize-none bg-transparent px-2 py-1 text-base leading-relaxed outline-none placeholder:text-muted-foreground/40 placeholder:font-normal"
+            className="aui-composer-input max-h-[8.05rem] min-h-[3.45rem] w-full resize-none bg-transparent px-[0.58rem] py-[0.29rem] text-[1.15rem] leading-relaxed outline-none placeholder:text-muted-foreground/40 placeholder:font-normal"
             rows={1}
             autoFocus
             aria-label="Message input"
@@ -108,7 +108,7 @@ const ThreadWelcome: FC = () => {
         </div>
       </ComposerPrimitive.Root>
 
-      <div className="mt-5 w-full">
+      <div className="mt-[1.44rem] w-full">
         <PersonaSelector />
       </div>
     </div>
@@ -149,7 +149,7 @@ const AssistantLoadingText: FC = () => {
       <FinancialLoadingIcon className="text-accent" />
       <span
         key={phraseIndex}
-        className="loading-text-pulse inline-block text-[14px] font-medium"
+        className="loading-text-pulse inline-block text-[16px] font-medium"
       >
         {LOADING_VERBS[phraseIndex]}...
       </span>
@@ -192,7 +192,7 @@ const Composer: FC = () => {
       >
         <ComposerPrimitive.Input
           placeholder="Ask about investments, funds, or financial planning..."
-          className="aui-composer-input max-h-32 min-h-10 w-full resize-none bg-transparent px-2 py-1 text-[15px] leading-relaxed outline-none placeholder:text-muted-foreground/60"
+          className="aui-composer-input max-h-32 min-h-20 w-full resize-none bg-transparent px-2 py-1 text-[15px] leading-relaxed outline-none placeholder:text-muted-foreground/60"
           rows={1}
           autoFocus
           aria-label="Message input"
@@ -220,7 +220,6 @@ const ComposerAction: FC = () => {
             />
           }
         >
-          <ArrowUpIcon className="aui-composer-send-icon size-4" />
         </ComposerPrimitive.Send>
       </AuiIf>
       <AuiIf condition={(s) => s.thread.isRunning}>
@@ -258,7 +257,7 @@ const AssistantMessage: FC = () => {
       className="group/msg aui-assistant-message-root fade-in slide-in-from-bottom-1 relative mx-auto flex w-full max-w-(--thread-max-width) animate-in items-start gap-2 py-4 duration-200"
       data-role="assistant"
     >
-      <div className="aui-assistant-message-content min-w-0 flex-1 wrap-break-word px-2 text-[15px] leading-[1.65] text-foreground">
+      <div className="aui-assistant-message-content min-w-0 flex-1 wrap-break-word px-2 text-[17px] leading-[1.65] text-foreground">
         <AssistantMessageContent />
         <MessageError />
       </div>
@@ -297,7 +296,7 @@ const UserMessage: FC = () => {
       data-role="user"
     >
       <div className="aui-user-message-content-wrapper relative col-start-2 min-w-0">
-        <div className="aui-user-message-content wrap-break-word peer rounded-2xl bg-muted px-4 py-3 text-[15px] leading-[1.65] text-foreground empty:hidden">
+        <div className="aui-user-message-content wrap-break-word peer rounded-2xl bg-muted px-4 py-3 text-[17px] leading-[1.65] text-foreground empty:hidden">
           <MessagePrimitive.Parts />
         </div>
         <div className="aui-user-action-bar-wrapper absolute top-1/2 left-0 -translate-x-full -translate-y-1/2 pr-2 peer-empty:hidden">
