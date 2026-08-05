@@ -65,5 +65,4 @@ Open `http://localhost:5173` and start chatting. The frontend expects the backen
 
 ## Known limitations
 
-- Fund fact sheet PDFs are ingested into Pinecone via `pdf_ingest.py`, but retrieval/citation for them is not yet fully wired into the chat flow.
 - No automated test suite is configured yet.
