@@ -17,10 +17,11 @@ import time
 import requests
 from bs4 import BeautifulSoup
 from xml.etree import ElementTree
+from rag_app.paths import ARTICLES_DIR
 
 BASE_URL = "https://www.allangray.co.za"
 SITEMAP_URL = f"{BASE_URL}/sitemap.xml"
-OUTPUT_DIR = "data/articles"
+OUTPUT_DIR = ARTICLES_DIR
 DELAY_BETWEEN_REQUESTS = 2  # seconds — be respectful
 HEADERS = {"User-Agent": "AllanClear-Scraper/1.0 (student project)"}
 
@@ -140,7 +141,7 @@ def save_article(article, index):
 
     # Create a filename from the URL slug
     slug = article["url"].rstrip("/").split("/")[-1]
-    filename = f"{index:03d}_{slug}.json"
+    filename = f"{index:04d}_{slug}.json"
     filepath = os.path.join(OUTPUT_DIR, filename)
 
     with open(filepath, "w", encoding="utf-8") as f:

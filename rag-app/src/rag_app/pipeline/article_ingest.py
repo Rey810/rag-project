@@ -1,48 +1,52 @@
-import os
+"""
+Article ingestion pipeline.
+
+Chunks the scraped articles in ``data/articles/``, writes them to
+``data/article_chunks.json``, then embeds and upserts them to Pinecone.
+
+Run from rag-app/:
+    python -m rag_app.pipeline.article_ingest               # chunk, save, embed, upsert
+    python -m rag_app.pipeline.article_ingest --chunk-only   # chunk + save only (no API calls)
+    python -m rag_app.pipeline.article_ingest --wipe         # delete all vectors first, then upsert
+"""
+import argparse
 import json
-from dotenv import load_dotenv 
-from pinecone import Pinecone
-from openai import OpenAI   
-
-load_dotenv()
-
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
-
-MODEL="gpt-4o-mini"
-PINECONE_INDEX_NAME= os.getenv("PINECONE_INDEX_NAME")
-INDEX = pc.Index(PINECONE_INDEX_NAME)
-
-import os
 import uuid
-import json
+
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-ARTICLES_FILE_PATH = os.path.join(os.path.dirname(__file__), "data", "articles")
+from ..embeddings import get_embeddings
+from ..paths import ARTICLE_CHUNKS_PATH, ARTICLES_DIR
+from ..vector_store import get_index
 
-# Chunk articles
-def chunk_text(text, chunk_size=1950, chunk_overlap=300):
+CHUNK_SIZE = 1950
+CHUNK_OVERLAP = 300
+BATCH_SIZE = 100
+
+
+def chunk_text(text, chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP):
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
-    chunks = text_splitter.split_text(text)
-    return chunks
+    return text_splitter.split_text(text)
 
-def chunk_articles():
-    chunks_with_metadata = []
 
-    for filename in os.listdir(ARTICLES_FILE_PATH):
-        if not filename.endswith(".json"):
-            continue
+def chunk_articles() -> list[dict]:
+    chunks_with_metadata: list[dict] = []
 
-        filepath = os.path.join(ARTICLES_FILE_PATH, filename)
+    article_files = sorted(ARTICLES_DIR.glob("*.json"))
+    if not article_files:
+        print(f"No article JSON files found in {ARTICLES_DIR}")
+        return chunks_with_metadata
 
-        with open(filepath, "r") as f:
+    for filepath in article_files:
+        with filepath.open("r") as f:
             data = json.load(f)
 
         article_chunks = chunk_text(data["body"])
-        print(f"[{filename}] \"{data['title']}\" -> {len(article_chunks)} chunks")
+        print(f"[{filepath.name}] \"{data['title']}\" -> {len(article_chunks)} chunks")
 
         for chunk_count, article_chunk in enumerate(article_chunks):
-            chunk_id = str(uuid.uuid4())
+            # Deterministic id so re-runs overwrite instead of duplicating.
+            chunk_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{data['url']}#{chunk_count}"))
 
             # Prepend metadata into the text that gets embedded
             enriched_chunk = (
@@ -66,79 +70,107 @@ def chunk_articles():
                 "source_type": "article"
             })
 
-    print(f"\nDone. {len(chunks_with_metadata)} total chunks from {len(os.listdir(ARTICLES_FILE_PATH))} files.")
+    print(f"\nDone. {len(chunks_with_metadata)} total chunks from {len(article_files)} files.")
     return chunks_with_metadata
 
 
-def get_embeddings(list_of_chunks):
-    embeddings = client.embeddings.create(input=list_of_chunks, model="text-embedding-3-small").data
+def save_chunks(chunks: list[dict]) -> None:
+    ARTICLE_CHUNKS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with ARTICLE_CHUNKS_PATH.open("w") as f:
+        json.dump(chunks, f)
+    print(f"\nChunks saved to {ARTICLE_CHUNKS_PATH}")
 
-    if len(list_of_chunks) > 1:
-        print(f"{len(embeddings)} embeddings created for {len(list_of_chunks)} chunks")
-    return embeddings
 
-
-def upsert_to_pinecone(list_of_chunks):
-    # try to add the embedding to Pinecone
-    vectors = [ 
+def upsert_chunks(chunks: list[dict]) -> None:
+    """Upsert already-embedded chunks. Metadata is every key except chunk_id/embedding."""
+    vectors = [
         {
             "id": chunk["chunk_id"],
             "values": chunk["embedding"],
             "metadata": {
-                k: v if v is not None else "" 
-                for k, v in chunk.items() 
-                if k not in ("chunk_id", "embedding")}
-        } for chunk in list_of_chunks
-    ] 
+                k: v if v is not None else ""
+                for k, v in chunk.items()
+                if k not in ("chunk_id", "embedding")
+            },
+        }
+        for chunk in chunks
+    ]
 
-    INDEX.upsert(vectors=vectors)
+    get_index().upsert(vectors=vectors)
 
 
-def create_and_upsert_embeddings(chunks, batch_size=100, deleteIndex=False):
+def wipe_index() -> None:
+    index = get_index()
+    print("=" * 72)
+    print("!! WIPE REQUESTED: deleting ALL vectors from the Pinecone index !!")
+    print("!! (index.delete(delete_all=True) -- this cannot be undone)      !!")
+    print("=" * 72)
+    try:
+        index.delete(delete_all=True)
+        print("All vectors deleted.")
+    except Exception as e:
+        print(f"Deleting all vectors failed: {e}")
+        raise
 
-    if deleteIndex:
-        try:
-            print(f"Attempting to delete index {PINECONE_INDEX_NAME}")
-            INDEX.delete(delete_all=True)
-            print(f"Index {PINECONE_INDEX_NAME} successfully deleted")
-        
-        except Exception as e:
-            print(f"Deleting index failed: {e}")
-            raise
+
+def create_and_upsert_embeddings(chunks: list[dict], batch_size: int = BATCH_SIZE, wipe: bool = False) -> None:
+    if wipe:
+        wipe_index()
 
     try:
-        # iterate over the chunks and process in batches
         for i in range(0, len(chunks), batch_size):
             batch = chunks[i:i + batch_size]
+            batch_num = i // batch_size + 1
 
             content_to_embed = [chunk["chunk"] for chunk in batch]
             embeddings = get_embeddings(content_to_embed)
-            print(f"Embeddings for batch {i // 100 + 1} created")
+            print(f"Embeddings for batch {batch_num} created ({len(embeddings)} embeddings for {len(batch)} chunks)")
 
-            # iterate over the embeddings and add embedding to it's respective chunk
             for embedding, chunk in zip(embeddings, batch):
-                chunk["embedding"] = embedding.embedding
-            
-            upsert_to_pinecone(batch)
-            print(f"Batch {i // 100 + 1} upserted to Pinecone")
+                chunk["embedding"] = embedding
+
+            upsert_chunks(batch)
+            print(f"Batch {batch_num} upserted to Pinecone")
 
         print(f"Done. Created {len(chunks)} embeddings and upserted to Pinecone")
     except Exception as e:
         print(f"Pipeline failed: {e}")
         raise
 
-if __name__ == "__main__":
-    # Chunk articles and save to file
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Chunk scraped articles, then embed and upsert them to Pinecone."
+    )
+    parser.add_argument(
+        "--wipe",
+        action="store_true",
+        help="Delete ALL vectors from the Pinecone index before upserting.",
+    )
+    parser.add_argument(
+        "--chunk-only",
+        action="store_true",
+        help="Only chunk articles and write article_chunks.json; no OpenAI/Pinecone calls.",
+    )
+    args = parser.parse_args()
+
     chunks = chunk_articles()
+    if not chunks:
+        print("Nothing to do.")
+        return
+
     print(f"\nFirst chunk preview:\n{json.dumps(chunks[0], indent=2)}")
-    print(f"\nSecond chunk preview:\n{json.dumps(chunks[1], indent=2)}")
+    save_chunks(chunks)
 
-    chunks_file = os.path.join(os.path.dirname(__file__), "data", "article_chunks.json")
-    with open(chunks_file, "w") as f:
-        json.dump(chunks, f)
-    print(f"\nChunks saved to {chunks_file}")
+    if args.chunk_only:
+        print("--chunk-only: stopping before embedding/upsert.")
+        return
 
-    with open(chunks_file, "r") as f:
-        ALL_CHUNKS = json.load(f)
+    with ARTICLE_CHUNKS_PATH.open("r") as f:
+        all_chunks = json.load(f)
 
-    create_and_upsert_embeddings(ALL_CHUNKS)
+    create_and_upsert_embeddings(all_chunks, wipe=args.wipe)
+
+
+if __name__ == "__main__":
+    main()

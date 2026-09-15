@@ -1,13 +1,16 @@
 """
 Fund fact sheet ingestion pipeline.
 
-Part A: Batch convert all PDFs in data/fund_fact_sheets/ to Markdown.
-Part B: Split Markdown files into section chunks.
-Part C: Generate contextual descriptions for each chunk using GPT-4o.
+Part A (--convert) : Batch convert all PDFs in data/fund_fact_sheets/ to Markdown.
+Part B (--split)   : Split Markdown files into section chunks.
+Part C (--describe): Generate contextual descriptions for each chunk using GPT-4o.
+Part D (--upsert)  : Embed the chunks and upsert them to Pinecone.
 
 Run from rag-app/:
-    poetry run python src/rag_app/pipeline/pdf_ingest.py
+    python -m rag_app.pipeline.pdf_ingest                  # --upsert only (default)
+    python -m rag_app.pipeline.pdf_ingest --convert --split --describe --upsert
 """
+import argparse
 import json
 import os
 import re
@@ -17,6 +20,15 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from openai import OpenAI
+
+from ..embeddings import get_embeddings
+from ..paths import (
+    FUND_FACT_SHEET_CHUNKS_PATH,
+    FUND_FACT_SHEET_MARKDOWN_DIR,
+    FUND_FACT_SHEETS_DIR,
+)
+from ..prompts import CONTEXTUAL_ADDITION_PROMPT
+from .article_ingest import upsert_chunks
 
 load_dotenv()
 
@@ -29,11 +41,10 @@ def _get_openai_client() -> OpenAI:
         _openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     return _openai_client
 
-from ..prompts import CONTEXTUAL_ADDITION_PROMPT
 
-PDF_DIR = Path("data/fund_fact_sheets")
-MARKDOWN_DIR = PDF_DIR / "markdown"
-CHUNKS_PATH = PDF_DIR / "fund_fact_sheet_chunks.json"
+PDF_DIR = FUND_FACT_SHEETS_DIR
+MARKDOWN_DIR = FUND_FACT_SHEET_MARKDOWN_DIR
+CHUNKS_PATH = FUND_FACT_SHEET_CHUNKS_PATH
 
 
 def extract_fund_name(markdown: str) -> str | None:
@@ -198,8 +209,6 @@ def generate_descriptions() -> None:
 
 
 def embed_and_upsert(batch_size: int = 100) -> None:
-    from article_ingest import get_embeddings, upsert_to_pinecone
-
     chunks = json.loads(CHUNKS_PATH.read_text(encoding="utf-8"))
     print(f"Embedding and upserting {len(chunks)} chunks in batches of {batch_size}...\n")
 
@@ -209,17 +218,38 @@ def embed_and_upsert(batch_size: int = 100) -> None:
         embeddings = get_embeddings(content_to_embed)
 
         for embedding, chunk in zip(embeddings, batch):
-            chunk["embedding"] = embedding.embedding
+            chunk["embedding"] = embedding
 
-        upsert_to_pinecone(batch)
+        upsert_chunks(batch)
         batch_num = i // batch_size + 1
         print(f"  Batch {batch_num} upserted ({len(batch)} vectors)")
 
     print(f"\nDone. {len(chunks)} vectors upserted to Pinecone.")
 
 
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Fund fact sheet ingestion pipeline (PDF -> Markdown -> chunks -> Pinecone)."
+    )
+    parser.add_argument("--convert", action="store_true", help="Part A: convert PDFs to Markdown (needs docling).")
+    parser.add_argument("--split", action="store_true", help="Part B: split Markdown into section chunks.")
+    parser.add_argument("--describe", action="store_true", help="Part C: add GPT-4o contextual descriptions.")
+    parser.add_argument("--upsert", action="store_true", help="Part D: embed chunks and upsert to Pinecone.")
+    args = parser.parse_args()
+
+    # No flags = just upsert (the previous default behaviour).
+    if not (args.convert or args.split or args.describe or args.upsert):
+        args.upsert = True
+
+    if args.convert:
+        convert_all_pdfs()
+    if args.split:
+        split_all_markdowns()
+    if args.describe:
+        generate_descriptions()
+    if args.upsert:
+        embed_and_upsert()
+
+
 if __name__ == "__main__":
-    # convert_all_pdfs()
-    # split_all_markdowns()
-    # generate_descriptions()
-    embed_and_upsert()
+    main()
