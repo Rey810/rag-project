@@ -1,0 +1,12 @@
+.git
+.claude
+.impeccable
+**/node_modules
+**/.venv
+**/__pycache__
+**/dist
+rag-app/data
+rag-app/.env
+rag-app/.env.*
+docs
+README.md
