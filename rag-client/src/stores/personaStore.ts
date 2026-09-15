@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-export type PersonaId = "just_the_answer" | "explain_simply" | "give_me_detail";
+export type PersonaId = "just_the_answer" | "explain_simply" | "give_me_detail" | "eminem";
 
 export interface Persona {
   id: PersonaId;
@@ -13,6 +13,7 @@ export const PERSONAS: Persona[] = [
   { id: "just_the_answer", name: "Just Answers", description: "Quick and direct" },
   { id: "explain_simply", name: "Explain Simply", description: "Clear and jargon-free" },
   { id: "give_me_detail", name: "Get Technical", description: "In-depth analysis" },
+  { id: "eminem", name: "Eminem", description: "Explicit. Unfiltered." },
 ];
 
 interface PersonaState {

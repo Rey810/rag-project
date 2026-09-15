@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from .search import get_similar_chunks
 from .used_sources import holdback_index, select_sources, split_used_sources
-from .prompts import SYSTEM_PROMPT, REWRITE_PROMPT, PERSONA_JUST_THE_ANSWER, PERSONA_EXPLAIN_SIMPLY, PERSONA_GIVE_ME_DETAIL
+from .prompts import SYSTEM_PROMPT, REWRITE_PROMPT, PERSONA_JUST_THE_ANSWER, PERSONA_EXPLAIN_SIMPLY, PERSONA_GIVE_ME_DETAIL, PERSONA_EMINEM
 
 import os
 import json
@@ -47,6 +47,7 @@ PERSONA_MAP = {
     "just_the_answer": PERSONA_JUST_THE_ANSWER,
     "explain_simply": PERSONA_EXPLAIN_SIMPLY,
     "give_me_detail": PERSONA_GIVE_ME_DETAIL,
+    "eminem": PERSONA_EMINEM,
 }
 
 # ---------------------------------

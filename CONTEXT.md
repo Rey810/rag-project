@@ -25,7 +25,7 @@ _Avoid_: reference, link
 ### Conversation
 
 **Persona**:
-The response style the user picks: just the answer, explain simply, or give me detail. Changes the system prompt, not the retrieval.
+The response style the user picks: just the answer, explain simply, give me detail, or Eminem (explicit, in-character delivery of the same facts). Changes the system prompt, not the retrieval.
 _Avoid_: mode, tone, style
 
 **Query Rewrite**:
