@@ -25,3 +25,5 @@ node_modules/
 CLAUDE.md
 
 dist/
+# keep the template even though .env.* is ignored
+!.env.example
