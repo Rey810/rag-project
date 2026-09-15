@@ -1,9 +1,10 @@
 import type { ChatModelAdapter } from "@assistant-ui/react";
 import { useChatSessionStore } from "@/stores/chatSessionStore";
 import { usePersonaStore } from "@/stores/personaStore";
+import { authHeaders, useAccessCodeStore } from "@/stores/accessCodeStore";
 import type { Source } from "@/types/sources";
 
-const API_URL = "http://localhost:8000/chat";
+const API_URL = "/chat";
 const SOURCES_SENTINEL = "[SOURCES]";
 
 interface BackendMessage {
@@ -33,13 +34,19 @@ export const chatModelAdapter: ChatModelAdapter = {
 
     const response = await fetch(API_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({
         chat_history: chatHistory,
         persona: usePersonaStore.getState().selectedPersona,
       }),
       signal: abortSignal,
     });
+
+    if (response.status === 401) {
+      // Code was rejected (or revoked) - drop it so the access gate reappears.
+      useAccessCodeStore.getState().clearAccessCode();
+      throw new Error("Your access code is no longer valid. Please sign in again.");
+    }
 
     if (!response.ok) {
       throw new Error(`Backend error: ${response.status}`);

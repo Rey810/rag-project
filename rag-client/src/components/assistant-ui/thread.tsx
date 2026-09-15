@@ -162,7 +162,7 @@ const AssistantLoadingText: FC = () => {
 const AssistantMessageContent: FC = () => {
   const content = useAuiState((s) => s.message.content);
   const isRunning = useAuiState(
-    (s) => s.message.status.type === "running",
+    (s) => s.message.status?.type === "running",
   );
 
   const hasText = content.some(
@@ -211,34 +211,31 @@ const ComposerAction: FC = () => {
   return (
     <div className="aui-composer-action-wrapper relative flex items-center justify-end">
       <AuiIf condition={(s) => !s.thread.isRunning}>
-        <ComposerPrimitive.Send
-          render={
-            <TooltipIconButton
-              tooltip="Send message"
-              side="bottom"
-              type="button"
-              variant="default"
-              size="icon"
-              className="aui-composer-send size-8 rounded-full transition-transform hover:scale-105 active:scale-95"
-              aria-label="Send message"
-            />
-          }
-        >
+        <ComposerPrimitive.Send asChild>
+          <TooltipIconButton
+            tooltip="Send message"
+            side="bottom"
+            type="button"
+            variant="default"
+            size="icon"
+            className="aui-composer-send size-8 rounded-full transition-transform hover:scale-105 active:scale-95"
+            aria-label="Send message"
+          >
+            <ArrowUpIcon className="aui-composer-send-icon size-4" />
+          </TooltipIconButton>
         </ComposerPrimitive.Send>
       </AuiIf>
       <AuiIf condition={(s) => s.thread.isRunning}>
-        <ComposerPrimitive.Cancel
-          render={
-            <Button
-              type="button"
-              variant="default"
-              size="icon"
-              className="aui-composer-cancel size-8 rounded-full transition-transform hover:scale-105 active:scale-95"
-              aria-label="Stop generating"
-            />
-          }
-        >
-          <SquareIcon className="aui-composer-cancel-icon size-3 fill-current" />
+        <ComposerPrimitive.Cancel asChild>
+          <Button
+            type="button"
+            variant="default"
+            size="icon"
+            className="aui-composer-cancel size-8 rounded-full transition-transform hover:scale-105 active:scale-95"
+            aria-label="Stop generating"
+          >
+            <SquareIcon className="aui-composer-cancel-icon size-3 fill-current" />
+          </Button>
         </ComposerPrimitive.Cancel>
       </AuiIf>
     </div>
@@ -320,15 +317,13 @@ const UserActionBar: FC = () => {
       autohide="not-last"
       className="aui-user-action-bar-root flex flex-col items-end"
     >
-      <ActionBarPrimitive.Edit
-        render={
-          <TooltipIconButton
-            tooltip="Edit"
-            className="aui-user-action-edit p-3 transition-colors hover:text-foreground"
-          />
-        }
-      >
-        <PencilIcon />
+      <ActionBarPrimitive.Edit asChild>
+        <TooltipIconButton
+          tooltip="Edit"
+          className="aui-user-action-edit p-3 transition-colors hover:text-foreground"
+        >
+          <PencilIcon />
+        </TooltipIconButton>
       </ActionBarPrimitive.Edit>
     </ActionBarPrimitive.Root>
   );
@@ -343,11 +338,13 @@ const EditComposer: FC = () => {
           autoFocus
         />
         <div className="aui-edit-composer-footer mx-3 mb-3 flex items-center gap-2 self-end">
-          <ComposerPrimitive.Cancel render={<Button variant="ghost" size="sm" />}>
-            Cancel
+          <ComposerPrimitive.Cancel asChild>
+            <Button variant="ghost" size="sm">
+              Cancel
+            </Button>
           </ComposerPrimitive.Cancel>
-          <ComposerPrimitive.Send render={<Button size="sm" />}>
-            Update
+          <ComposerPrimitive.Send asChild>
+            <Button size="sm">Update</Button>
           </ComposerPrimitive.Send>
         </div>
       </ComposerPrimitive.Root>
@@ -368,18 +365,18 @@ const BranchPicker: FC<BranchPickerPrimitive.Root.Props> = ({
       )}
       {...rest}
     >
-      <BranchPickerPrimitive.Previous
-        render={<TooltipIconButton tooltip="Previous" />}
-      >
-        <ChevronLeftIcon />
+      <BranchPickerPrimitive.Previous asChild>
+        <TooltipIconButton tooltip="Previous">
+          <ChevronLeftIcon />
+        </TooltipIconButton>
       </BranchPickerPrimitive.Previous>
       <span className="aui-branch-picker-state font-medium">
         <BranchPickerPrimitive.Number /> / <BranchPickerPrimitive.Count />
       </span>
-      <BranchPickerPrimitive.Next
-        render={<TooltipIconButton tooltip="Next" />}
-      >
-        <ChevronRightIcon />
+      <BranchPickerPrimitive.Next asChild>
+        <TooltipIconButton tooltip="Next">
+          <ChevronRightIcon />
+        </TooltipIconButton>
       </BranchPickerPrimitive.Next>
     </BranchPickerPrimitive.Root>
   );
