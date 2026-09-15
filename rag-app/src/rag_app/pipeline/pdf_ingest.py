@@ -3,7 +3,7 @@ Fund fact sheet ingestion pipeline.
 
 Part A (--convert) : Batch convert all PDFs in data/fund_fact_sheets/ to Markdown.
 Part B (--split)   : Split Markdown files into section chunks.
-Part C (--describe): Generate contextual descriptions for each chunk using GPT-4o.
+Part C (--describe): Generate contextual descriptions for each chunk using Claude.
 Part D (--upsert)  : Embed the chunks and upsert them to Pinecone.
 
 Run from rag-app/:
@@ -19,7 +19,7 @@ import uuid
 from pathlib import Path
 
 from dotenv import load_dotenv
-from openai import OpenAI
+import anthropic
 
 from ..embeddings import get_embeddings
 from ..paths import (
@@ -32,14 +32,30 @@ from .article_ingest import upsert_chunks
 
 load_dotenv()
 
-_openai_client: OpenAI | None = None
+DESCRIPTION_MODEL = "claude-sonnet-5"
+
+_anthropic_client: anthropic.Anthropic | None = None
 
 
-def _get_openai_client() -> OpenAI:
-    global _openai_client
-    if _openai_client is None:
-        _openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-    return _openai_client
+def _get_anthropic_client() -> anthropic.Anthropic:
+    global _anthropic_client
+    if _anthropic_client is None:
+        _anthropic_client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    return _anthropic_client
+
+
+# Every fact sheet states its reporting date once, either as "Fact Sheet at
+# 28 February 2026" (Orbis sheets) or "Fund information on 28 February 2026"
+# (Allan Gray sheets). Stored on each chunk as `as_at` so the chat model can
+# date figures that don't carry their own period.
+_AS_AT_RE = re.compile(
+    r"(?:Fact Sheet at|Fund information on)\s+(\d{1,2} [A-Z][a-z]+ \d{4})", re.IGNORECASE
+)
+
+
+def extract_as_at_date(markdown: str) -> str | None:
+    match = _AS_AT_RE.search(markdown)
+    return match.group(1) if match else None
 
 
 PDF_DIR = FUND_FACT_SHEETS_DIR
@@ -89,7 +105,7 @@ def convert_all_pdfs() -> None:
     print(f"\nDone. {len(pdf_files)} file(s) converted to {MARKDOWN_DIR}.")
 
 
-def split_markdown_into_chunks(md_path: Path, fund_name: str) -> list[dict]:
+def split_markdown_into_chunks(md_path: Path, fund_name: str, as_at: str | None) -> list[dict]:
     """Split a Markdown file on ## headings, returning one chunk per section."""
     text = md_path.read_text(encoding="utf-8")
 
@@ -117,6 +133,7 @@ def split_markdown_into_chunks(md_path: Path, fund_name: str) -> list[dict]:
                 "source_type": "fund_fact_sheet",
                 "fund": fund_name,
                 "section": section_name,
+                "as_at": as_at,
                 "chunk_index": chunk_index,
                 "chunk": chunk_text,
             }
@@ -139,9 +156,12 @@ def split_all_markdowns() -> None:
     for md_path in md_files:
         markdown = md_path.read_text(encoding="utf-8")
         fund_name = extract_fund_name(markdown) or md_path.stem.strip()
-        chunks = split_markdown_into_chunks(md_path, fund_name)
+        as_at = extract_as_at_date(markdown)
+        if not as_at:
+            print(f"  WARNING: no 'as at' date found in {md_path.name}")
+        chunks = split_markdown_into_chunks(md_path, fund_name, as_at)
         all_chunks.extend(chunks)
-        print(f"  {md_path.name}: {len(chunks)} chunk(s)  [fund: {fund_name}]")
+        print(f"  {md_path.name}: {len(chunks)} chunk(s)  [fund: {fund_name}, as at: {as_at}]")
 
     CHUNKS_PATH.write_text(json.dumps(all_chunks, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"\nTotal chunks: {len(all_chunks)}")
@@ -174,7 +194,7 @@ def generate_descriptions() -> None:
         fund_name = extract_fund_name(markdown) or md_path.stem.strip()
         md_by_fund[fund_name] = markdown
 
-    client = _get_openai_client()
+    client = _get_anthropic_client()
 
     for count, (i, chunk) in enumerate(remaining, start=1):
         fund_name = chunk["fund"]
@@ -187,12 +207,13 @@ def generate_descriptions() -> None:
             section_text=section_text,
         )
 
-        response = client.responses.create(
-            model="gpt-4o",
-            input=prompt,
+        response = client.messages.create(
+            model=DESCRIPTION_MODEL,
+            max_tokens=300,
             temperature=0,
+            messages=[{"role": "user", "content": prompt}],
         )
-        description = response.output_text.strip()
+        description = response.content[0].text.strip()
         chunk["chunk"] = f"{description}\n\n{section_text}"
 
         print(f"[{count}/{len(remaining)}] {fund_name} — {chunk['section']}")
@@ -233,7 +254,7 @@ def main() -> None:
     )
     parser.add_argument("--convert", action="store_true", help="Part A: convert PDFs to Markdown (needs docling).")
     parser.add_argument("--split", action="store_true", help="Part B: split Markdown into section chunks.")
-    parser.add_argument("--describe", action="store_true", help="Part C: add GPT-4o contextual descriptions.")
+    parser.add_argument("--describe", action="store_true", help="Part C: add Claude-generated contextual descriptions.")
     parser.add_argument("--upsert", action="store_true", help="Part D: embed chunks and upsert to Pinecone.")
     args = parser.parse_args()
 

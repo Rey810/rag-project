@@ -7,6 +7,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from .search import get_similar_chunks
+from .used_sources import holdback_index, select_sources, split_used_sources
 from .prompts import SYSTEM_PROMPT, REWRITE_PROMPT, PERSONA_JUST_THE_ANSWER, PERSONA_EXPLAIN_SIMPLY, PERSONA_GIVE_ME_DETAIL
 
 import os
@@ -36,7 +37,10 @@ else:
 # --------------------------------- 
 
 client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-MODEL = "claude-sonnet-4-6"
+# Sonnet 5 for both the answer and the query rewrite: fast and cheap enough for
+# a chat loop. Kept as two constants so they can diverge later.
+ANSWER_MODEL = "claude-sonnet-5"
+REWRITE_MODEL = "claude-sonnet-5"
 TOP_CHUNK_COUNT = 5
 
 PERSONA_MAP = {
@@ -87,11 +91,11 @@ class ChatRequest(BaseModel):
     chat_history: list[dict]
     persona: str = "just_the_answer"
 
-def query_rewrite_llm_call(user_query, chat_history, system_prompt=SYSTEM_PROMPT):
+def query_rewrite_llm_call(user_query, chat_history, system_prompt=REWRITE_PROMPT):
     try:
         print(f"Attempting to rewrite query: {user_query}")
         response = client.messages.create(
-            model=MODEL,
+            model=REWRITE_MODEL,
             max_tokens=512,
             system=system_prompt.format(
                 user_query=user_query,
@@ -107,9 +111,12 @@ def query_rewrite_llm_call(user_query, chat_history, system_prompt=SYSTEM_PROMPT
         print(f"Query rewrite pipeline failed: {e}")
         raise
 
-def format_chunk(chunk):
+def format_chunk(chunk, number: int):
+    """Shape a retrieved chunk for the prompt. ``number`` is the 1-based Source
+    Number the model reports back in its [USED_SOURCES: ...] line."""
     if chunk["metadata"].get("title"):
         return {
+            "Source Number": number,
             "Allan Gray Source Material Type": "Article",
             "Article Title": chunk["metadata"]["title"],
             "Article Author": chunk["metadata"]["author"],
@@ -118,54 +125,66 @@ def format_chunk(chunk):
             "Article Publication Date": chunk["metadata"]["date"]
         }
     else:
-        return {
+        formatted = {
+            "Source Number": number,
             "Allan Gray Source Material Type": "Fund Fact Sheet",
             "Fund Name": chunk["metadata"]["fund"],
             "Fund Fact Sheet Section Title": chunk["metadata"]["section"],
             "Description and Details of Section": chunk["metadata"]["chunk"]
         }
+        # Reporting date of the whole fact sheet (see pdf_ingest.extract_as_at_date).
+        # Absent on vectors upserted before the field existed.
+        if chunk["metadata"].get("as_at"):
+            formatted["Fact Sheet Date (figures are as at this date unless stated otherwise)"] = chunk["metadata"]["as_at"]
+        return formatted
 
 def build_sources(similar_chunks) -> list[dict]:
-    seen_articles: set[str] = set()
-    seen_funds: set[str] = set()
-    sources = []
+    """One entry per distinct article or fact sheet, in retrieval order. Each
+    carries ``chunk_numbers``: the Source Numbers (matching format_chunk) of the
+    chunks behind it, used later to keep only the sources the answer relied on."""
+    sources: dict[str, dict] = {}
 
-    for chunk in similar_chunks:
+    for number, chunk in enumerate(similar_chunks, start=1):
         meta = chunk["metadata"]
         if meta.get("title"):  # article
-            url = meta.get("url", "")
-            if url and url not in seen_articles:
-                seen_articles.add(url)
-                sources.append({
+            key = meta.get("url", "")
+            if not key:
+                continue
+            if key not in sources:
+                sources[key] = {
                     "type": "article",
                     "title": meta["title"],
-                    "url": url,
+                    "url": key,
                     "label": meta["title"],
-                })
+                    "chunk_numbers": [],
+                }
         else:  # fund fact sheet
-            fund = meta.get("fund", "Allan Gray Fund")
-            if fund not in seen_funds:
-                seen_funds.add(fund)
-                display_name = fund if "Allan Gray - Orbis" in fund else fund.removeprefix("Allan Gray ").strip()
-                sources.append({
+            key = meta.get("fund", "Allan Gray Fund")
+            if key not in sources:
+                display_name = key if "Allan Gray - Orbis" in key else key.removeprefix("Allan Gray ").strip()
+                sources[key] = {
                     "type": "fund_fact_sheet",
-                    "title": fund,
+                    "title": key,
                     "url": None,
                     "label": f"{display_name} Fact Sheet",
-                })
+                    "chunk_numbers": [],
+                }
+        sources[key]["chunk_numbers"].append(number)
 
-    return sources
+    return list(sources.values())
 
 def rag_enhanced_llm_call(chat_history, similar_chunks, persona_prompt, system_prompt=SYSTEM_PROMPT):
 
     sources = build_sources(similar_chunks)
 
     formatted_chunks_context = {
-        "Relevant context": [format_chunk(chunk) for chunk in similar_chunks]
+        "Relevant context": [
+            format_chunk(chunk, number) for number, chunk in enumerate(similar_chunks, start=1)
+        ]
     }
 
     with client.messages.stream(
-        model=MODEL,
+        model=ANSWER_MODEL,
         max_tokens=2048,
         system=system_prompt.format(
             persona=persona_prompt,
@@ -174,10 +193,24 @@ def rag_enhanced_llm_call(chat_history, similar_chunks, persona_prompt, system_p
         ),
         messages=chat_history,
     ) as stream:
+        # The model ends with a "[USED_SOURCES: ...]" line that must not reach the
+        # client. Hold back any tail that could be the start of it (see
+        # used_sources.holdback_index) and emit the rest as it streams.
+        pending = ""
         for text in stream.text_stream:
-            yield text
+            pending += text
+            cut = holdback_index(pending)
+            if cut > 0:
+                yield pending[:cut]
+                pending = pending[cut:]
 
-    yield f"[SOURCES]{json.dumps(sources)}"
+    tail, used = split_used_sources(pending)
+    if tail:
+        yield tail
+    if used is None:
+        print("No [USED_SOURCES] marker in answer; showing all retrieved sources")
+
+    yield f"[SOURCES]{json.dumps(select_sources(sources, used))}"
 
 
 @app.post("/chat", dependencies=[Depends(require_access_code)])

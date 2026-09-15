@@ -12,9 +12,9 @@ AllanClear is a RAG (Retrieval-Augmented Generation) chatbot that answers questi
 AllanClear retrieves relevant source material before generating an answer, rather than relying on the LLM's own knowledge.
 
 1. **Scrape** — [scraper.py](rag-app/src/rag_app/pipeline/scraper.py) crawls the allangray.co.za sitemap for articles and writes one JSON file per article to `rag-app/data/articles/`.
-2. **Chunk, embed & store** — [article_ingest.py](rag-app/src/rag_app/pipeline/article_ingest.py) splits articles into overlapping chunks (1950 chars, 300 overlap) with LangChain's `RecursiveCharacterTextSplitter`, prepends title/author/date/category to each chunk, embeds with OpenAI's `text-embedding-3-small`, and upserts to a Pinecone index. [pdf_ingest.py](rag-app/src/rag_app/pipeline/pdf_ingest.py) does the same for fund fact sheets (Docling PDF → Markdown, split by section, GPT-4o contextual description, embed, upsert). Chunk ids are deterministic, so re-running overwrites rather than duplicates.
-3. **Query** — on each user message, [search.py](rag-app/src/rag_app/search.py) embeds the query and retrieves the top 5 most relevant chunks from Pinecone.
-4. **Respond** — [server.py](rag-app/src/rag_app/server.py) streams a response from Claude (Anthropic) back to the client over Server-Sent Events, citing the retrieved sources.
+2. **Chunk, embed & store** — [article_ingest.py](rag-app/src/rag_app/pipeline/article_ingest.py) splits articles into overlapping chunks (1950 chars, 300 overlap) with LangChain's `RecursiveCharacterTextSplitter`, prepends title/author/date/category to each chunk, embeds with OpenAI's `text-embedding-3-small`, and upserts to a Pinecone index. [pdf_ingest.py](rag-app/src/rag_app/pipeline/pdf_ingest.py) does the same for fund fact sheets (Docling PDF → Markdown, split by section, Claude contextual description, embed, upsert). Chunk ids are deterministic, so re-running overwrites rather than duplicates.
+3. **Query** — on each user message, [search.py](rag-app/src/rag_app/search.py) embeds the query, retrieves the top 20 candidates from Pinecone, scores them with Pinecone's hosted `bge-reranker-v2-m3` reranker and fuses the two rankings (reciprocal rank fusion) to keep the best 5. If the rerank call fails, the dense order is used as-is.
+4. **Respond** — [server.py](rag-app/src/rag_app/server.py) streams a response from Claude (Anthropic) back to the client over Server-Sent Events, followed by the sources the answer actually drew on (the model reports which numbered context entries it used; that line is stripped before display).
 
 **Multi-turn query rewrite** — when a conversation has more than one turn, the backend first rewrites the latest user message into a standalone query (via an LLM call) before running retrieval, so follow-up questions ("what about the second one?") work without the user restating context.
 
@@ -77,7 +77,7 @@ The app deploys as one container: FastAPI serves both the API and the built Reac
 
    | Variable | Purpose |
    |---|---|
-   | `ANTHROPIC_API_KEY` | chat and query rewrite |
+   | `ANTHROPIC_API_KEY` | chat, query rewrite, fact-sheet descriptions |
    | `OPENAI_API_KEY` | query embeddings |
    | `PINECONE_API_KEY`, `PINECONE_INDEX_NAME` | retrieval |
    | `APP_ACCESS_CODE` | the shared access code. Generate one with `python -c "import secrets; print(secrets.token_urlsafe(24))"`. The server refuses to start without it. |
