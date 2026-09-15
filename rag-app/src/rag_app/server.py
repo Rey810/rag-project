@@ -1,6 +1,10 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+import hmac
+from pathlib import Path
+
+from fastapi import Depends, FastAPI, HTTPException, Response
 from fastapi.responses import StreamingResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from .search import get_similar_chunks
 from .prompts import SYSTEM_PROMPT, REWRITE_PROMPT, PERSONA_JUST_THE_ANSWER, PERSONA_EXPLAIN_SIMPLY, PERSONA_GIVE_ME_DETAIL
@@ -18,12 +22,16 @@ load_dotenv()
 # ---------------------------------
 # ------ Arize Obserability -------
 # --------------------------------- 
-tracer_provider = register(
-    space_id=os.getenv("ARIZE_SPACE_ID"),
-    api_key=os.getenv("ARIZE_API_KEY"),
-    project_name="allanclear",
-)
-AnthropicInstrumentor().instrument(tracer_provider=tracer_provider)
+# Enabled only when both keys are present, so the server also boots without them.
+if os.getenv("ARIZE_SPACE_ID") and os.getenv("ARIZE_API_KEY"):
+    tracer_provider = register(
+        space_id=os.getenv("ARIZE_SPACE_ID"),
+        api_key=os.getenv("ARIZE_API_KEY"),
+        project_name="allanclear",
+    )
+    AnthropicInstrumentor().instrument(tracer_provider=tracer_provider)
+else:
+    print("Arize keys not set; observability disabled")
 # ---------------------------------
 # --------------------------------- 
 
@@ -37,14 +45,43 @@ PERSONA_MAP = {
     "give_me_detail": PERSONA_GIVE_ME_DETAIL,
 }
 
+# ---------------------------------
+# ------ Access gate --------------
+# ---------------------------------
+# The app is private: one shared access code, compared server-side on every
+# request. The frontend sends it as a bearer token. See README "Deployment".
+ACCESS_CODE = os.getenv("APP_ACCESS_CODE")
+if not ACCESS_CODE:
+    raise RuntimeError("APP_ACCESS_CODE is not set; refusing to start an unprotected server")
+
+_bearer = HTTPBearer(auto_error=False)
+
+
+def require_access_code(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+) -> None:
+    supplied = credentials.credentials if credentials else ""
+    if not hmac.compare_digest(supplied.encode(), ACCESS_CODE.encode()):
+        raise HTTPException(status_code=401, detail="Invalid access code")
+
+
+# Built frontend, served from the same origin as the API (no CORS needed).
+STATIC_DIR = Path(
+    os.getenv("STATIC_DIR", Path(__file__).resolve().parents[3] / "rag-client" / "dist")
+)
+
 app = FastAPI()
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
+@app.get("/auth/check", dependencies=[Depends(require_access_code)], status_code=204)
+def auth_check():
+    return Response(status_code=204)
+
 
 class ChatRequest(BaseModel):
     chat_history: list[dict]
@@ -143,7 +180,7 @@ def rag_enhanced_llm_call(chat_history, similar_chunks, persona_prompt, system_p
     yield f"[SOURCES]{json.dumps(sources)}"
 
 
-@app.post("/chat")
+@app.post("/chat", dependencies=[Depends(require_access_code)])
 def chat(request: ChatRequest):
     print(f"Received chat request: {request}")
 
@@ -175,3 +212,10 @@ def chat(request: ChatRequest):
         media_type="text/event-stream"
     )
 
+
+# Mounted last so API routes take precedence. Skipped when there is no build
+# (e.g. local dev, where Vite serves the frontend and proxies /chat here).
+if STATIC_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
+else:
+    print(f"No frontend build at {STATIC_DIR}; serving API only")
