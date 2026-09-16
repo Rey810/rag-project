@@ -1,3 +1,5 @@
+from collections import Counter
+
 from .embeddings import get_embeddings
 from .vector_store import get_client, get_index
 
@@ -8,16 +10,71 @@ from .vector_store import get_client, get_index
 # telling funds apart but over-favours prose articles on its own; the dense rank
 # keeps it honest. Measured on sample queries: fusion put the right fact-sheet
 # section first where rerank alone buried it under articles.
+#
+# Article Chunks are ~90% of the index and many carry a fund's name in their
+# title, so they crowd Fund Fact Sheet Chunks out of the dense top 20 entirely
+# ("Stable Fund annualised returns" returned 20 Articles). A second, Fund Fact
+# Sheet only query guarantees the reranker sees some, and capping Chunks per
+# Article stops one Article filling several of the final slots.
 RERANK_MODEL = "bge-reranker-v2-m3"
 RERANK_CANDIDATES = 20
+FACT_SHEET_CANDIDATES = 10
+MAX_CHUNKS_PER_ARTICLE = 2
+FACT_SHEET_FILTER = {"source_type": {"$eq": "fund_fact_sheet"}}
 
 
 def get_query_embedding(query: str) -> list[float]:
     return get_embeddings([query])[0]
 
 
-def search_vectordb(query_embedding: list[float], top_k: int = 3):
-    return get_index().query(vector=query_embedding, top_k=top_k, include_metadata=True)
+def search_vectordb(query_embedding: list[float], top_k: int = 3, metadata_filter: dict | None = None):
+    return get_index().query(
+        vector=query_embedding, top_k=top_k, include_metadata=True, filter=metadata_filter
+    )
+
+
+def is_article(match) -> bool:
+    return bool(match["metadata"].get("title"))
+
+
+def dedupe_articles(matches, limit: int = MAX_CHUNKS_PER_ARTICLE):
+    """Keep at most ``limit`` Chunks per Article URL, in the given order (so the
+    higher-scoring ones survive). Fund Fact Sheet Chunks are never dropped:
+    each section is distinct information."""
+    per_article: Counter[str] = Counter()
+    kept = []
+    for match in matches:
+        url = match["metadata"].get("url") if is_article(match) else None
+        if url:
+            if per_article[url] >= limit:
+                continue
+            per_article[url] += 1
+        kept.append(match)
+    return kept
+
+
+def gather_candidates(query_embedding: list[float], top_k: int):
+    """Union of the general dense top-N and a Fund Fact Sheet only dense top-N,
+    deduped by Chunk id, then capped per Article.
+
+    The union is ordered by each Chunk's best rank in either list, not by raw
+    score: Fund Fact Sheet Chunks score lower on cosine similarity than Article
+    prose for the same question, so sorting the union by score would put every
+    fact sheet behind every Article and the fusion below would bury them
+    again. Ties keep the higher score first."""
+    general = search_vectordb(query_embedding, max(top_k, RERANK_CANDIDATES)).matches
+    fact_sheets = search_vectordb(
+        query_embedding, FACT_SHEET_CANDIDATES, metadata_filter=FACT_SHEET_FILTER
+    ).matches
+
+    by_id = {}
+    best_rank: dict[str, int] = {}
+    for ranked in (general, fact_sheets):
+        for rank, match in enumerate(ranked):
+            by_id.setdefault(match["id"], match)
+            best_rank[match["id"]] = min(best_rank.get(match["id"], rank), rank)
+    ordered = sorted(by_id.values(), key=lambda m: (best_rank[m["id"]], -m["score"]))
+    return dedupe_articles(ordered)
 
 
 def rerank_text(match) -> str:
@@ -25,7 +82,7 @@ def rerank_text(match) -> str:
     metadata; fact-sheet chunks get the fund and section prepended so the
     reranker can tell sibling funds apart."""
     meta = match["metadata"]
-    if meta.get("title"):
+    if is_article(match):
         return meta["chunk"]
     return f"{meta.get('fund', '')}\n{meta.get('section', '')}\n{meta['chunk']}"
 
@@ -44,6 +101,9 @@ def rerank(query: str, matches, top_k: int, rrf_k: int = 60):
             documents=[{"id": m["id"], "text": rerank_text(m)} for m in matches],
             top_n=len(matches),
             return_documents=False,
+            # Long fact-sheet tables can exceed the reranker's token limit; without
+            # this the call 400s and every such query silently falls back.
+            parameters={"truncate": "END"},
         )
     except Exception as e:
         print(f"Rerank failed, falling back to dense order: {e}")
@@ -61,7 +121,7 @@ def rerank(query: str, matches, top_k: int, rrf_k: int = 60):
 def get_similar_chunks(query: str, top_k: int = 3):
     try:
         query_embedding = get_query_embedding(query)
-        candidates = search_vectordb(query_embedding, max(top_k, RERANK_CANDIDATES)).matches
+        candidates = gather_candidates(query_embedding, top_k)
         return rerank(query, candidates, top_k)
     except Exception as e:
         print(f"Query embedding and chunking retrieval pipeline failed: {e}")

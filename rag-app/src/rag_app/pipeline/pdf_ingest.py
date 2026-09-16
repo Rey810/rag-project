@@ -28,6 +28,7 @@ from ..paths import (
     FUND_FACT_SHEETS_DIR,
 )
 from ..prompts import CONTEXTUAL_ADDITION_PROMPT
+from ..config import NO_THINKING
 from .article_ingest import upsert_chunks
 
 load_dotenv()
@@ -211,6 +212,7 @@ def generate_descriptions() -> None:
             model=DESCRIPTION_MODEL,
             max_tokens=300,
             temperature=0,
+            thinking=NO_THINKING,
             messages=[{"role": "user", "content": prompt}],
         )
         description = response.content[0].text.strip()
