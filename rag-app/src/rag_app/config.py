@@ -23,3 +23,7 @@ NO_THINKING = {"type": "disabled"}
 # Chunks handed to the answer model. Ten rather than five so Fund Fact Sheet
 # Chunks fit alongside the Article Chunks that dominate dense retrieval.
 TOP_CHUNK_COUNT = 10
+
+# Upper bound when a query names several funds and retrieval adds Chunks per
+# extra fund (see ``chunk_count`` in search.py).
+MAX_CHUNK_COUNT = 20

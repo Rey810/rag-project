@@ -1,6 +1,9 @@
 from collections import Counter
+from collections.abc import Sequence
 
+from .config import MAX_CHUNK_COUNT
 from .embeddings import get_embeddings
+from .funds import detect_funds
 from .vector_store import get_client, get_index
 
 # Dense search alone tends to return near-identical sections from sibling funds
@@ -16,9 +19,16 @@ from .vector_store import get_client, get_index
 # ("Stable Fund annualised returns" returned 20 Articles). A second, Fund Fact
 # Sheet only query guarantees the reranker sees some, and capping Chunks per
 # Article stops one Article filling several of the final slots.
+#
+# When the query names several funds, one embedding expresses only one blend
+# of the names and the longer Orbis names win: the best Balanced Fund Chunk
+# sat at rank 18 of the Fund Fact Sheet only list on a four-fund question. So
+# each fund detected in the query text also gets a small fund-filtered query,
+# which guarantees it a place in the candidate set at dense rank 1.
 RERANK_MODEL = "bge-reranker-v2-m3"
 RERANK_CANDIDATES = 20
 FACT_SHEET_CANDIDATES = 10
+FUND_CANDIDATES = 3
 MAX_CHUNKS_PER_ARTICLE = 2
 FACT_SHEET_FILTER = {"source_type": {"$eq": "fund_fact_sheet"}}
 
@@ -53,11 +63,16 @@ def dedupe_articles(matches, limit: int = MAX_CHUNKS_PER_ARTICLE):
     return kept
 
 
-def gather_candidates(query_embedding: list[float], top_k: int):
-    """Union of the general dense top-N and a Fund Fact Sheet only dense top-N,
-    deduped by Chunk id, then capped per Article.
+def fund_filter(fund: str) -> dict:
+    return {"fund": {"$eq": fund}}
 
-    The union is ordered by each Chunk's best rank in either list, not by raw
+
+def gather_candidates(query_embedding: list[float], top_k: int, funds: Sequence[str]):
+    """Union of the general dense top-N, a Fund Fact Sheet only dense top-N and,
+    per named fund, a fund-filtered dense top-FUND_CANDIDATES, all with the
+    same embedding, deduped by Chunk id, then capped per Article.
+
+    The union is ordered by each Chunk's best rank in any list, not by raw
     score: Fund Fact Sheet Chunks score lower on cosine similarity than Article
     prose for the same question, so sorting the union by score would put every
     fact sheet behind every Article and the fusion below would bury them
@@ -66,10 +81,14 @@ def gather_candidates(query_embedding: list[float], top_k: int):
     fact_sheets = search_vectordb(
         query_embedding, FACT_SHEET_CANDIDATES, metadata_filter=FACT_SHEET_FILTER
     ).matches
+    per_fund = [
+        search_vectordb(query_embedding, FUND_CANDIDATES, metadata_filter=fund_filter(fund)).matches
+        for fund in funds
+    ]
 
     by_id = {}
     best_rank: dict[str, int] = {}
-    for ranked in (general, fact_sheets):
+    for ranked in (general, fact_sheets, *per_fund):
         for rank, match in enumerate(ranked):
             by_id.setdefault(match["id"], match)
             best_rank[match["id"]] = min(best_rank.get(match["id"], rank), rank)
@@ -118,11 +137,26 @@ def rerank(query: str, matches, top_k: int, rrf_k: int = 60):
     return [matches[i] for i in fused[:top_k]]
 
 
+def chunk_count(top_k: int, fund_count: int) -> int:
+    """``top_k`` is the base Chunk count. With two or more named funds each
+    extra fund adds FUND_CANDIDATES so the fund-filtered Chunks do not push
+    each other out, capped at MAX_CHUNK_COUNT (four funds and a base of 10
+    give 19). Zero or one fund leaves ``top_k`` unchanged."""
+    if fund_count < 2:
+        return top_k
+    return min(top_k + FUND_CANDIDATES * (fund_count - 1), MAX_CHUNK_COUNT)
+
+
 def get_similar_chunks(query: str, top_k: int = 3):
+    """Top Chunks for ``query``. ``top_k`` is the base count; a query naming
+    several funds returns more (see ``chunk_count``). Fund names are detected
+    in ``query`` itself, so the caller should pass the retrieval query (the
+    rewritten one from the second turn onward), not the raw message."""
     try:
+        funds = detect_funds(query)
         query_embedding = get_query_embedding(query)
-        candidates = gather_candidates(query_embedding, top_k)
-        return rerank(query, candidates, top_k)
+        candidates = gather_candidates(query_embedding, top_k, funds)
+        return rerank(query, candidates, chunk_count(top_k, len(funds)))
     except Exception as e:
         print(f"Query embedding and chunking retrieval pipeline failed: {e}")
         raise
